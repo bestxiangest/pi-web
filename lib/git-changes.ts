@@ -185,12 +185,32 @@ async function createTrackedFilePatch(
   }
 }
 
-export async function getGitFileDiff(cwd: string, filePath: string): Promise<GitFileDiffResponse> {
+export async function getGitFileDiff(cwd: string, filePath: string, ref?: string): Promise<GitFileDiffResponse> {
   const repositoryRoot = await findRepositoryRoot(cwd);
   if (!repositoryRoot || !isWithinPath(repositoryRoot, filePath)) return { supported: false };
 
   const resolvedFilePath = path.resolve(filePath);
   const relativePath = toGitPath(path.relative(repositoryRoot, resolvedFilePath));
+
+  // Ref mode: diff of one file at a specific commit (vs its first parent),
+  // used by the Git sidebar's history view. The file need not be modified now.
+  if (ref) {
+    try {
+      const patch = await git(repositoryRoot, [
+        "show", "--no-color", "--first-parent", "--format=", ref, "--", relativePath,
+      ], TEXT_PREVIEW_MAX_BYTES * 4);
+      if (!patch.includes("\n@@ ")) return { supported: false };
+      const statusOut = await git(repositoryRoot, [
+        "diff-tree", "--no-commit-id", "-r", "--name-status", ref, "--", relativePath,
+      ]);
+      const letter = statusOut.trim().split("\t")[0]?.slice(0, 1) || "M";
+      const status = letter === "A" ? "added" : letter === "D" ? "deleted" : letter === "R" ? "renamed" : "modified";
+      return { supported: true, status, patch };
+    } catch {
+      return { supported: false };
+    }
+  }
+
   const entries = await readStatusEntries(repositoryRoot);
   const entry = entries.find((candidate) => candidate.path === relativePath);
   if (!entry) return { supported: false };

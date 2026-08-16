@@ -12,6 +12,7 @@ import { ModelsConfig } from "./ModelsConfig";
 import { SkillsConfig } from "./SkillsConfig";
 import { PluginsConfig } from "./PluginsConfig";
 import { UsageDashboard } from "./UsageDashboard";
+import { GitSidebar } from "./GitSidebar";
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
 import { BranchNavigator } from "./BranchNavigator";
 import { useTheme } from "@/hooks/useTheme";
@@ -104,6 +105,7 @@ export function AppShell() {
   const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
   const [pluginsConfigOpen, setPluginsConfigOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
+  const [sidebarMode, setSidebarMode] = useState<"sessions" | "git">("sessions");
   const [projectTrust, setProjectTrust] = useState<ProjectTrustStatus | null>(null);
   const [projectTrustDialogOpen, setProjectTrustDialogOpen] = useState(false);
   const [projectTrustBusy, setProjectTrustBusy] = useState(false);
@@ -790,15 +792,19 @@ export function AppShell() {
   const handleOpenFile = useCallback((
     filePath: string,
     fileName: string,
-    options?: { sourceSessionId?: string | null; modeHint?: "diff" },
+    options?: { sourceSessionId?: string | null; modeHint?: "diff"; diffRef?: string | null },
   ) => {
     const sourceSessionId = options?.sourceSessionId;
     const modeHint = options?.modeHint;
-    const tabId = `file:${filePath}`;
+    const diffRef = options?.diffRef ?? null;
+    // Pinned-ref diff tabs get their own identity so they don't collide with
+    // the same file's worktree diff tab.
+    const tabId = diffRef ? `file:${filePath}@${diffRef.slice(0, 8)}` : `file:${filePath}`;
     setFileTabs((prev) => openFileTab(prev, {
       fileName,
       filePath,
       modeHint,
+      diffRef,
       sourceSessionId,
       tabId,
     }));
@@ -807,6 +813,16 @@ export function AppShell() {
     // On mobile the file panel is full-screen; close the drawer so it shows.
     if (isMobile) setSidebarOpen(false);
   }, [isMobile]);
+
+  // Git sidebar diff clicks: worktree changes and commit-pinned diffs both go
+  // through the built-in file viewer's diff mode.
+  const handleOpenGitDiff = useCallback((
+    absolutePath: string,
+    fileName: string,
+    ref?: string | null,
+  ) => {
+    handleOpenFile(absolutePath, fileName, { modeHint: "diff", diffRef: ref ?? null, sourceSessionId: selectedSession?.id ?? null });
+  }, [handleOpenFile, selectedSession?.id]);
 
   const handleOpenLinkedFile = useCallback((filePath: string) => {
     handleOpenFile(filePath, getFileName(filePath), { sourceSessionId: selectedSession?.id ?? null });
@@ -909,25 +925,33 @@ export function AppShell() {
 
   const sidebarContent = (
     <>
-      <SessionSidebar
-        selectedSessionId={selectedSession?.id ?? null}
-        onSelectSession={handleSelectSession}
-        onNewSession={handleNewSession}
-        initialSessionId={initialSessionId}
-        skipInitialProjectSelection={initialNavigation.requestedCwd !== null}
-        onInitialRestoreDone={handleInitialRestoreDone}
-        refreshKey={refreshKey}
-        onSessionDeleted={handleSessionDeleted}
-        selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
-        onCwdChange={handleCwdChange}
-        onOpenFile={handleOpenFile}
-        explorerRefreshKey={explorerRefreshKey}
-        onExplorerRefresh={handleExplorerRefresh}
-        onAtMention={handleAtMention}
-        onAtMentions={handleAtMentions}
-        onBackgroundTaskDone={handleBackgroundTaskDone}
-        onRunningSessionIdsChange={handleRunningSessionIdsChange}
-      />
+      {sidebarMode === "git" ? (
+        <GitSidebar
+          cwd={selectedSession?.cwd ?? newSessionCwd ?? activeCwd}
+          borrowSessionId={selectedSession?.id ?? null}
+          onOpenDiff={handleOpenGitDiff}
+        />
+      ) : (
+        <SessionSidebar
+          selectedSessionId={selectedSession?.id ?? null}
+          onSelectSession={handleSelectSession}
+          onNewSession={handleNewSession}
+          initialSessionId={initialSessionId}
+          skipInitialProjectSelection={initialNavigation.requestedCwd !== null}
+          onInitialRestoreDone={handleInitialRestoreDone}
+          refreshKey={refreshKey}
+          onSessionDeleted={handleSessionDeleted}
+          selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
+          onCwdChange={handleCwdChange}
+          onOpenFile={handleOpenFile}
+          explorerRefreshKey={explorerRefreshKey}
+          onExplorerRefresh={handleExplorerRefresh}
+          onAtMention={handleAtMention}
+          onAtMentions={handleAtMentions}
+          onBackgroundTaskDone={handleBackgroundTaskDone}
+          onRunningSessionIdsChange={handleRunningSessionIdsChange}
+        />
+      )}
       <div style={{ padding: "8px", flexShrink: 0, display: "flex", justifyContent: "space-between", gap: 4 }}>
         {([
           {
@@ -979,21 +1003,37 @@ export function AppShell() {
               </svg>
             ),
           },
-        ] as { label: string; onClick: () => void; disabled: boolean; icon: React.ReactNode }[]).map(({ label, onClick, disabled, icon }) => (
+          {
+            label: translate("common.git"),
+            onClick: () => setSidebarMode((mode) => (mode === "git" ? "sessions" : "git")),
+            disabled: !activeCwd && !selectedSession?.cwd && !newSessionCwd,
+            active: sidebarMode === "git",
+            icon: (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="12" r="3" />
+                <path d="M6 9v6" /><path d="M18 9a9 9 0 0 1-9 9" />
+              </svg>
+            ),
+          },
+        ] as { label: string; onClick: () => void; disabled: boolean; active?: boolean; icon: React.ReactNode }[]).map(({ label, onClick, disabled, active, icon }) => (
           <button
             key={label}
             onClick={onClick}
             disabled={disabled}
             title={label}
+            aria-pressed={active ?? false}
             style={{
               flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              height: 32, padding: 0, background: "none", border: "none",
-              borderRadius: 9, color: "var(--text-muted)", cursor: disabled ? "default" : "pointer",
+              height: 32, padding: 0,
+              background: active ? "var(--bg-selected)" : "none",
+              border: "none", borderRadius: 9,
+              color: active ? "var(--text)" : "var(--text-muted)",
+              cursor: disabled ? "default" : "pointer",
               fontSize: 12, opacity: disabled ? 0.35 : 1,
               transition: "background 0.12s, color 0.12s",
             }}
-            onMouseEnter={(e) => { if (!disabled) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; } }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
+            onMouseEnter={(e) => { if (!disabled) { e.currentTarget.style.background = active ? "var(--bg-selected)" : "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; } }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = active ? "var(--bg-selected)" : "none"; e.currentTarget.style.color = active ? "var(--text)" : "var(--text-muted)"; }}
           >
             {icon}
             {label}
@@ -2236,6 +2276,7 @@ export function AppShell() {
               sourceSessionId={activeFileTab.sourceSessionId}
               gitRefreshKey={explorerRefreshKey}
               initialDisplayMode={activeFileTab.initialDisplayMode}
+              diffRef={activeFileTab.diffRef}
               initialState={activeFileTab.viewerState}
               watchEnabled={rightPanelOpen}
               onStateChange={(viewerState) => handleFileViewerStateChange(

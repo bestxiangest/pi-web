@@ -11,6 +11,8 @@ export interface Tab {
   filePath: string;
   sourceSessionId?: string | null;
   initialDisplayMode?: FileViewerDisplayMode;
+  /** Commit-ish for pinned diff tabs (this file at that commit). */
+  diffRef?: string | null;
   viewerState?: FileViewerState;
   viewerRevision?: number;
 }

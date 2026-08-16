@@ -44,6 +44,8 @@ interface Props {
   onAtMention?: (relativePath: string, isDir: boolean) => void;
   gitRefreshKey?: number;
   initialDisplayMode?: DisplayMode;
+  /** Pin the diff to this commit-ish (file at that commit) instead of worktree vs HEAD. */
+  diffRef?: string | null;
   initialState?: FileViewerState;
   onStateChange?: (state: FileViewerState) => void;
   watchEnabled?: boolean;
@@ -928,6 +930,7 @@ export function FileViewer({
   onAtMention,
   gitRefreshKey,
   initialDisplayMode,
+  diffRef,
   initialState,
   onStateChange,
   watchEnabled = true,
@@ -951,6 +954,7 @@ export function FileViewer({
       onAtMention={onAtMention}
       gitRefreshKey={gitRefreshKey}
       initialDisplayMode={initialDisplayMode}
+      diffRef={diffRef}
       initialState={initialState}
       onStateChange={onStateChange}
       watchEnabled={watchEnabled}
@@ -967,6 +971,7 @@ function TextFileViewer({
   onAtMention,
   gitRefreshKey,
   initialDisplayMode,
+  diffRef,
   initialState,
   onStateChange,
   watchEnabled = true,
@@ -1066,7 +1071,7 @@ function TextFileViewer({
       });
   }, [sourceSessionId]);
 
-  const fetchGitDiff = useCallback(async (targetPath: string) => {
+  const fetchGitDiff = useCallback(async (targetPath: string, targetRef?: string | null) => {
     const requestId = ++gitDiffRequestRef.current;
     setGitDiffLoading(true);
     if (!cwd) {
@@ -1078,6 +1083,7 @@ function TextFileViewer({
 
     try {
       const params = new URLSearchParams({ cwd, path: targetPath });
+      if (targetRef) params.set("ref", targetRef);
       const response = await fetch(`/api/git/diff?${params.toString()}`);
       const next = await response.json() as GitFileDiffResponse & { error?: string };
       if (requestId !== gitDiffRequestRef.current) return;
@@ -1124,7 +1130,8 @@ function TextFileViewer({
 
     const synchronize = () => {
       void fetchContent(filePath);
-      void fetchGitDiff(filePath);
+      // A pinned-ref diff is immutable — no need to refresh it on file changes.
+      if (!diffRef) void fetchGitDiff(filePath);
     };
 
     const es = new EventSource(getFileApiUrl(filePath, "watch", sourceSessionId));
@@ -1149,11 +1156,11 @@ function TextFileViewer({
       es.close();
       if (esRef.current === es) esRef.current = null;
     };
-  }, [filePath, fetchContent, fetchGitDiff, sourceSessionId, watchEnabled]);
+  }, [diffRef, filePath, fetchContent, fetchGitDiff, sourceSessionId, watchEnabled]);
 
   useEffect(() => {
-    void fetchGitDiff(filePath);
-  }, [fetchGitDiff, filePath, gitRefreshKey]);
+    void fetchGitDiff(filePath, diffRef);
+  }, [diffRef, fetchGitDiff, filePath, gitRefreshKey]);
 
   useEffect(() => {
     // HTML gets the same rendered-first treatment as markdown: a generated page

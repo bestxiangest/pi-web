@@ -5,6 +5,8 @@ interface OpenFileTabInput {
   fileName: string;
   filePath: string;
   modeHint?: "diff";
+  /** Commit-ish: pins this diff tab to the file's state at that commit. */
+  diffRef?: string | null;
   sourceSessionId?: string | null;
   tabId: string;
 }
@@ -18,6 +20,7 @@ export function openFileTab(tabs: Tab[], input: OpenFileTabInput): Tab[] {
       filePath: input.filePath,
       sourceSessionId: input.sourceSessionId,
       initialDisplayMode: input.modeHint,
+      diffRef: input.diffRef ?? null,
       viewerState: input.modeHint ? {
         displayMode: input.modeHint,
         wrapLines: false,
@@ -40,6 +43,7 @@ export function openFileTab(tabs: Tab[], input: OpenFileTabInput): Tab[] {
     if (sourceChanged) next.sourceSessionId = input.sourceSessionId;
     if (input.modeHint) {
       next.initialDisplayMode = input.modeHint;
+      next.diffRef = input.diffRef ?? null;
       next.viewerState = {
         displayMode: input.modeHint,
         wrapLines: tab.viewerState?.wrapLines ?? false,
