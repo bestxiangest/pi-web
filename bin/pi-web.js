@@ -16,9 +16,11 @@ const path = require("path");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const fs = require("fs");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
+const { launchDesktopApp } = require("./desktop-app");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { parseLaunchOptions } = require("./pi-web-options");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { wireChildProcessLifecycle } = require("./process-lifecycle");
+const { wireAppProcessLifecycle, wireChildProcessLifecycle } = require("./process-lifecycle");
 
 const pkgDir = path.join(__dirname, "..");
 const nextDir = path.join(pkgDir, ".next");
@@ -38,7 +40,15 @@ try {
   }
 }
 
-const { port, hostname, openBrowser } = parseLaunchOptions();
+let launchOptions;
+try {
+  launchOptions = parseLaunchOptions();
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+}
+
+const { mode, port, hostname, openBrowser } = launchOptions;
 const loopbackHostnames = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 const passwordEnabled = Boolean(process.env.PI_WEB_PASSWORD);
 
@@ -69,7 +79,10 @@ const child = spawn(process.execPath, [nextBin, ...nextArgs], {
   stdio: ["inherit", "pipe", "inherit"],
   env: { ...process.env, PI_WEB_HOSTNAME: hostname },
 });
-wireChildProcessLifecycle(child);
+const appLifecycle = mode === "app"
+  ? wireAppProcessLifecycle(child)
+  : null;
+if (!appLifecycle) wireChildProcessLifecycle(child);
 
 let browserOpened = false;
 const url = `http://${hostname}:${port}`;
@@ -79,6 +92,18 @@ child.stdout.on("data", (chunk) => {
   process.stdout.write(text);
   if (openBrowser && !browserOpened && text.includes("Ready")) {
     browserOpened = true;
+    if (mode === "app") {
+      try {
+        const appChild = launchDesktopApp(url, { pkgDir });
+        appLifecycle.attachAppProcess(appChild);
+        console.log("Opened Pi Web desktop window");
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : String(error));
+        appLifecycle.shutdown(1);
+      }
+      return;
+    }
+
     const isWindows = process.platform === "win32";
     const isMac = process.platform === "darwin";
     // Avoid `shell: true` to suppress Node.js DEP0190 deprecation

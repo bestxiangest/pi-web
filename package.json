@@ -1,6 +1,7 @@
 {
   "name": "@sharpcaterpillar/pi-web",
-  "version": "0.8.10",
+  "productName": "Pi Web",
+  "version": "0.8.11",
   "description": "Web UI for the pi coding agent",
   "homepage": "https://github.com/bestxiangest/pi-web#readme",
   "repository": {
@@ -19,6 +20,7 @@
   },
   "files": [
     "bin",
+    "desktop",
     ".next",
     "!.next/cache",
     "!.next/dev",
@@ -76,5 +78,8 @@
     "tailwindcss": "^4.2.2",
     "typescript": "^5"
   },
-  "author": "Sharpcaterpillar <1816054322@qq.com>"
+  "author": "Sharpcaterpillar <1816054322@qq.com>",
+  "optionalDependencies": {
+    "electron": "43.4.0"
+  }
 }

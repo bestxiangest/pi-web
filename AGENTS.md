@@ -84,6 +84,15 @@ lib/
   normalize.ts        normalizeToolCalls() — field name mismatch between file format and our types
   worktree.ts         project/worktree resolution and git worktree operations
 
+bin/
+  pi-web.js           npm CLI entrypoint for browser and desktop launch modes
+  desktop-app.js      resolves and starts the optional Electron runtime
+  process-lifecycle.js supervises Next.js and Electron child processes
+
+desktop/
+  main.cjs            secure Electron window, Dock lifecycle, and application menu
+  window-policy.cjs   same-origin navigation and external-link policy helpers
+
 components/
   AppShell.tsx        layout + URL state + tab management
   SessionSidebar.tsx  session tree + FileExplorer
@@ -186,6 +195,12 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 ### Completion sound
 - `hooks/useAudio.ts` stores the toggle in `localStorage` as `pi-sound-enabled` and reuses one `AudioContext`.
 - Browser autoplay policy means sound must be unlocked from a user gesture; `ChatInput` calls the unlock hook from interactive controls, and `ChatWindow` plays the tone from `onAgentEnd`.
+
+### Desktop app mode
+- `pi-web app` starts the same Next.js server as browser mode, then launches the optional Electron runtime without packaging or installing a standalone desktop application.
+- The CLI owns both processes: quitting Electron stops Next.js, a server failure stops Electron, and terminal signals are forwarded to both children.
+- On macOS, closing the last window keeps the Dock process alive; activating the Dock item recreates the window. `Command+Q` exits Electron and lets the CLI stop the server.
+- Electron renderers keep `nodeIntegration` disabled with context isolation and sandboxing enabled. Navigation is restricted to the Pi Web origin; safe external links open through the system browser.
 
 ### Exported session HTML
 - `/api/sessions/[id]/export` delegates to pi's export helper, then patches recursive tree helpers in the generated HTML to iterative versions so very deep linear sessions do not overflow the browser call stack.

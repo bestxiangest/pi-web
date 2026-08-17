@@ -36,9 +36,17 @@ pi-web
 
 To update, stop the running process with `Ctrl+C` and run the same install command again. To uninstall, run `npm uninstall -g @agegr/pi-web`.
 
+To open Pi Web in a desktop window with its own Dock or taskbar identity, use the app command:
+
+```bash
+pi-web app
+```
+
+App mode uses the optional Electron runtime installed with Pi Web; it does not install a separate desktop application. On macOS, use `Command+H` or the Dock icon to hide and restore Pi Web. Closing the window keeps the Dock app available, while `Command+Q` or stopping the CLI with `Ctrl+C` quits the window and server.
+
 ## Configuration
 
-For port and hostname, command-line options override the corresponding environment variables. Either `--no-open` or `PI_WEB_NO_OPEN=1` disables automatic browser opening.
+For port and hostname, command-line options override the corresponding environment variables. In regular web mode, either `--no-open` or `PI_WEB_NO_OPEN=1` disables automatic browser opening.
 
 | Option or environment variable | Purpose | Default |
 | --- | --- | --- |
